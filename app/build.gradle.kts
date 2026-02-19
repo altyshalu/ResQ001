@@ -36,6 +36,12 @@ android {
     }
     buildFeatures {
         viewBinding = true
+        // ДОБАВЬТЕ ЭТУ СТРОКУ:
+        compose = true
+    }
+    // ДОБАВЬТЕ ЭТОТ БЛОК для Compose:
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.4"
     }
 }
 
@@ -50,7 +56,17 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.8.0")
     implementation("androidx.fragment:fragment-ktx:1.6.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    implementation("androidx.core:core-ktx:1.12.0")
+
+    // ✅ ПРАВИЛЬНЫЕ ЗАВИСИМОСТИ ДЛЯ COMPOSE MATERIAL 3
+    implementation("androidx.compose.ui:ui:1.5.4")
+    implementation("androidx.compose.material3:material3:1.1.2")  // Material 3 (не material)
+    implementation("androidx.compose.ui:ui-tooling-preview:1.5.4")
+    implementation("androidx.activity:activity-compose:1.8.0")
+    debugImplementation("androidx.compose.ui:ui-tooling:1.5.4")
+
+    // Для поддержки тем Compose (Color.kt, Theme.kt, Type.kt)
+    implementation("androidx.compose.runtime:runtime:1.5.4")
+    implementation("androidx.compose.foundation:foundation:1.5.4")
 
     // Для серийного порта (USB)
     implementation("com.github.mik3y:usb-serial-for-android:3.6.0")

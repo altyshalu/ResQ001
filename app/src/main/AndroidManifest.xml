@@ -2,22 +2,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- РАЗРЕШЕНИЯ - все по одному разу -->
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.USB_PERMISSION" />
 
-    <!-- Для USB (если через OTG) -->
-    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+    <!-- ОСОБЕННОСТИ УСТРОЙСТВА - все по одному разу -->
+    <uses-feature
+        android:name="android.hardware.usb.host"
+        android:required="false" />
     <uses-feature
         android:name="android.hardware.telephony"
         android:required="false" />
-
-    <uses-permission android:name="android.permission.USB_PERMISSION" />
+    <!-- Bluetooth не указываем как required="false", так как он есть на всех устройствах -->
 
     <application
         android:allowBackup="true"
