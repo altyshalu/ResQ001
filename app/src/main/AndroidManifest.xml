@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- РАЗРЕШЕНИЯ - все по одному разу -->
+    <!-- РАЗРЕШЕНИЯ -->
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -10,16 +10,19 @@
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" /> <!-- Добавлено -->
     <uses-permission android:name="android.permission.USB_PERMISSION" />
 
-    <!-- ОСОБЕННОСТИ УСТРОЙСТВА - все по одному разу -->
+    <!-- ОСОБЕННОСТИ УСТРОЙСТВА -->
     <uses-feature
         android:name="android.hardware.usb.host"
         android:required="false" />
     <uses-feature
         android:name="android.hardware.telephony"
         android:required="false" />
-    <!-- Bluetooth не указываем как required="false", так как он есть на всех устройствах -->
+    <uses-feature
+        android:name="android.hardware.bluetooth"
+        android:required="false" /> <!-- Добавлено, если не обязателен -->
 
     <application
         android:allowBackup="true"
@@ -31,6 +34,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MaterialComponents.DayNight.DarkActionBar"
         tools:targetApi="31">
+
+        <!-- Для USB устройств -->
+        <meta-data
+            android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+            android:resource="@xml/device_filter" />
 
         <activity
             android:name=".MainActivity"

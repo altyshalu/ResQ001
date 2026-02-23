@@ -1,21 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.cardview.widget.CardView
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="8dp"
-    app:cardBackgroundColor="#16213E"
+    android:layout_margin="4dp"
     app:cardCornerRadius="12dp"
-    app:cardElevation="4dp"
-    app:cardUseCompatPadding="true">
+    app:cardElevation="2dp"
+    app:cardBackgroundColor="#FFFFFF">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="16dp">
+        android:padding="12dp"
+        android:gravity="center_vertical">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -24,28 +22,30 @@
             android:orientation="vertical">
 
             <TextView
-                android:id="@+id/tvContactName"
+                android:id="@+id/contactName"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Имя контакта"
-                android:textColor="#FFFFFF"
-                android:textSize="18sp"
+                android:textColor="#1A1A2E"
+                android:textSize="16sp"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/tvContactPhone"
+                android:id="@+id/contactPhone"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="+7 999 123-45-67"
-                android:textColor="#888888"
-                android:textSize="14sp" />
+                android:text="+996 XXX XXX XXX"
+                android:textColor="#666666"
+                android:textSize="14sp"
+                android:layout_marginTop="2dp" />
         </LinearLayout>
 
         <CheckBox
-            android:id="@+id/cbSelectContact"
+            android:id="@+id/contactCheckBox"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:buttonTint="#0F3460" />
+            android:layout_gravity="center_vertical"
+            android:buttonTint="#E94560" />
+
     </LinearLayout>
 </androidx.cardview.widget.CardView>

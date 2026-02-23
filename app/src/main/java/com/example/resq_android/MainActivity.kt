@@ -6,12 +6,17 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.telephony.SmsManager
 import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.resq_android.databinding.ActivityMainBinding
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -21,8 +26,14 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var bluetoothService: BluetoothService
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private val cancellationTokenSource = CancellationTokenSource()
     private var selectedContacts = mutableListOf<EmergencyContact>()
     private var isSendingSOS = false
+    private var isTrackingActive = false
+    private var trackingJob: kotlinx.coroutines.Job? = null
+
+
 
     // Константы
     companion object {
@@ -30,6 +41,7 @@ class MainActivity : AppCompatActivity() {
         private const val REQUEST_ENABLE_BT = 101
         private const val REQUEST_SMS_PERMISSION = 102
         private const val REQUEST_BLUETOOTH_PERMISSIONS = 103
+        private const val REQUEST_LOCATION_PERMISSION = 104
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,6 +51,9 @@ class MainActivity : AppCompatActivity() {
 
         // Инициализация Bluetooth сервиса
         bluetoothService = BluetoothService(this)
+
+        // Инициализация Location Client
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         setupUI()
         checkPermissions()
@@ -105,6 +120,15 @@ class MainActivity : AppCompatActivity() {
             val intent = Intent(this, ContactsActivity::class.java)
             startActivityForResult(intent, REQUEST_CONTACTS)
         }
+
+        // Новая кнопка для отслеживания
+        binding.btnShareLocation.setOnClickListener {
+            if (isTrackingActive) {
+                stopLiveTracking()
+            } else {
+                startLiveTracking()
+            }
+        }
     }
 
     private fun checkPermissions() {
@@ -115,6 +139,16 @@ class MainActivity : AppCompatActivity() {
                 this,
                 arrayOf(Manifest.permission.SEND_SMS),
                 REQUEST_SMS_PERMISSION
+            )
+        }
+
+        // Запрашиваем разрешение на геолокацию
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                REQUEST_LOCATION_PERMISSION
             )
         }
 
@@ -155,14 +189,7 @@ class MainActivity : AppCompatActivity() {
                     Manifest.permission.BLUETOOTH_CONNECT
                 ) != PackageManager.PERMISSION_GRANTED
             ) {
-                // TODO: Consider calling
-                //    ActivityCompat#requestPermissions
-                // here to request the missing permissions, and then overriding
-                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                //                                          int[] grantResults)
-                // to handle the case where the user grants the permission. See the documentation
-                // for ActivityCompat#requestPermissions for more details.
-                return
+                return@find false
             }
             it.name?.startsWith("HC") == true ||
                     it.name?.contains("SIM800") == true
@@ -183,25 +210,161 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun getCurrentLocation(onLocationReady: (String, Double, Double) -> Unit) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "Нет разрешения на геолокацию", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        binding.tvSosStatus.text = "Получение координат..."
+        binding.tvSosStatus.visibility = android.view.View.VISIBLE
+
+        fusedLocationClient.getCurrentLocation(
+            Priority.PRIORITY_HIGH_ACCURACY,
+            cancellationTokenSource.token
+        ).addOnSuccessListener { location ->
+            if (location != null) {
+                val mapsLink = "https://www.google.com/maps?q=${location.latitude},${location.longitude}"
+                val locationText = String.format(
+                    "📍 Местоположение: %s (точность: %.0fм)",
+                    mapsLink,
+                    location.accuracy
+                )
+                onLocationReady(locationText, location.latitude, location.longitude)
+            } else {
+                // Если не удалось получить быстро, пробуем последнее известное
+                fusedLocationClient.lastLocation.addOnSuccessListener { lastLocation ->
+                    if (lastLocation != null) {
+                        val mapsLink = "https://www.google.com/maps?q=${lastLocation.latitude},${lastLocation.longitude}"
+                        val locationText = String.format(
+                            "📍 Последнее известное: %s",
+                            mapsLink
+                        )
+                        onLocationReady(locationText, lastLocation.latitude, lastLocation.longitude)
+                    } else {
+                        binding.tvSosStatus.text = "Не удалось получить координаты"
+                        Toast.makeText(this, "Включите GPS и выйдите на открытое пространство", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }.addOnFailureListener { e ->
+            binding.tvSosStatus.text = "Ошибка GPS: ${e.message}"
+        }
+    }
+
+    private fun startLiveTracking() {
+        if (selectedContacts.isEmpty()) {
+            Toast.makeText(this, "Сначала выберите контакты в настройках", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        isTrackingActive = true
+
+        // 🔥 ВСТАВЬТЕ ЭТИ СТРОКИ:
+        binding.tvTrackingStatus.text = "Остановить"
+        binding.btnShareLocation.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.holo_red_dark)
+
+        binding.tvSosStatus.text = "Отслеживание активно..."
+
+        Toast.makeText(this, "Начало отслеживания. Координаты будут отправляться каждые 30 секунд", Toast.LENGTH_LONG).show()
+
+        sendCurrentLocation(isInitial = true)
+
+        trackingJob = CoroutineScope(Dispatchers.IO).launch {
+            while (isTrackingActive) {
+                delay(30000)
+                if (isTrackingActive) {
+                    sendCurrentLocation(isInitial = false)
+                }
+            }
+        }
+    }
+
+    private fun stopLiveTracking() {
+        isTrackingActive = false
+        trackingJob?.cancel()
+
+        // 🔥 ВСТАВЬТЕ ЭТИ СТРОКИ:
+        binding.tvTrackingStatus.text = "Отслеживание"
+        binding.btnShareLocation.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.holo_green_light)
+
+        binding.tvSosStatus.text = "Отслеживание остановлено"
+        Toast.makeText(this, "Отслеживание остановлено", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun sendCurrentLocation(isInitial: Boolean) {
+        getCurrentLocation { locationText, lat, lon ->
+            val message = if (isInitial) {
+                "🚀 Начало отслеживания! $locationText"
+            } else {
+                "🔄 Обновление местоположения: $locationText"
+            }
+
+            sendLocationToContacts(message)
+
+            if (isInitial) {
+                runOnUiThread {
+                    binding.tvSosStatus.text = "Первая точка отправлена"
+                }
+            }
+        }
+    }
+
+    private fun sendLocationToContacts(message: String) {
+        selectedContacts.forEach { contact ->
+            if (bluetoothService.isConnected()) {
+                bluetoothService.sendSMS(contact.phone.filter { it.isDigit() || it == '+' }, message)
+            } else {
+                try {
+                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS)
+                        == PackageManager.PERMISSION_GRANTED) {
+                        val smsManager = SmsManager.getDefault()
+                        smsManager.sendTextMessage(
+                            contact.phone.filter { it.isDigit() || it == '+' },
+                            null,
+                            message,
+                            null,
+                            null
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.e("SMS", "Ошибка отправки: ${e.message}")
+                }
+            }
+        }
+    }
+
+    // 🔥 ИСПРАВЛЕННЫЙ МЕТОД: при нажатии SOS отправляет живые координаты
     private fun sendEmergencySOS() {
         if (selectedContacts.isEmpty()) {
             Toast.makeText(this, "Сначала выберите контакты в настройках", Toast.LENGTH_LONG).show()
             return
         }
 
-        // Проверяем, подключено ли Bluetooth устройство
-        if (!bluetoothService.isConnected()) {
-            // Если Bluetooth не подключен, используем стандартную отправку SMS
-            sendViaSmsManager()
-        } else {
-            // Если Bluetooth подключен, отправляем через SIM800L
-            sendViaSim800L()
+        // Сразу получаем живые координаты и отправляем
+        getCurrentLocation { locationText, lat, lon ->
+            val fullMessage = "🚨 SOS! Мне нужна помощь! $locationText"
+
+            if (bluetoothService.isConnected()) {
+                sendViaSim800L(fullMessage)
+            } else {
+                sendViaSmsManager(fullMessage)
+            }
+
+            // Автоматически начинаем отслеживание после SOS
+            if (!isTrackingActive) {
+                CoroutineScope(Dispatchers.Main).launch {
+                    delay(1000)
+                    startLiveTracking()
+                }
+            }
         }
     }
 
-    private fun sendViaSim800L() {
+    private fun sendViaSim800L(message: String) {
         isSendingSOS = true
-        binding.tvSosStatus.text = "Отправка SOS через SIM800L..."
+        binding.tvSosStatus.text = "Отправка через SIM800L..."
         binding.tvSosStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_light))
 
         // Анимация кнопки
@@ -209,37 +372,22 @@ class MainActivity : AppCompatActivity() {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // Получаем геолокацию (тестовые координаты)
-                val location = "Широта: 55.7558, Долгота: 37.6173"
-
-                // Отправляем SMS каждому контакту через SIM800L
                 selectedContacts.forEach { contact ->
-                    val message = "SOS! Мне нужна помощь! Местоположение: $location"
-
-                    // Обновляем UI
                     runOnUiThread {
-                        binding.tvSosStatus.text = "Отправка SMS на ${contact.name}..."
+                        binding.tvSosStatus.text = "Отправка на ${contact.name}..."
                     }
-
                     bluetoothService.sendSMS(contact.phone.filter { it.isDigit() || it == '+' }, message)
-
-                    // Пауза между отправками
                     delay(2000)
                 }
 
-                // Обновляем UI в основном потоке
                 CoroutineScope(Dispatchers.Main).launch {
-                    binding.tvSosStatus.text = "SOS отправлен ${selectedContacts.size} контактам через SIM800L"
+                    binding.tvSosStatus.text = "✅ SOS отправлен!"
                     Toast.makeText(this@MainActivity,
                         "SOS отправлен через SIM800L!",
                         Toast.LENGTH_LONG).show()
 
                     // Возвращаем кнопку в исходное состояние
                     binding.sosButton.animate().scaleX(1f).scaleY(1f).setDuration(200).start()
-
-                    // Сбрасываем статус через 3 секунды
-                    delay(3000)
-                    binding.tvSosStatus.text = ""
                     isSendingSOS = false
                 }
 
@@ -256,8 +404,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun sendViaSmsManager() {
-        // Проверяем разрешение на SMS
+    private fun sendViaSmsManager(message: String) {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS)
             != PackageManager.PERMISSION_GRANTED) {
             Toast.makeText(this, "Требуется разрешение на отправку SMS", Toast.LENGTH_SHORT).show()
@@ -273,9 +420,7 @@ class MainActivity : AppCompatActivity() {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val smsManager = android.telephony.SmsManager.getDefault()
-                val location = "Моё местоположение: тестовые координаты"
-                val message = "SOS! Мне срочно нужна помощь! $location"
+                val smsManager = SmsManager.getDefault()
 
                 selectedContacts.forEach { contact ->
                     smsManager.sendTextMessage(
@@ -285,24 +430,17 @@ class MainActivity : AppCompatActivity() {
                         null,
                         null
                     )
-
-                    // Задержка между отправками
                     delay(500)
                 }
 
-                // Обновляем UI в основном потоке
                 CoroutineScope(Dispatchers.Main).launch {
-                    binding.tvSosStatus.text = "SOS отправлен!"
+                    binding.tvSosStatus.text = "✅ SOS отправлен!"
                     Toast.makeText(this@MainActivity,
                         "SOS отправлен ${selectedContacts.size} контактам через SMS",
                         Toast.LENGTH_LONG).show()
 
                     // Возвращаем кнопку в исходное состояние
                     binding.sosButton.animate().scaleX(1f).scaleY(1f).setDuration(200).start()
-
-                    // Сбрасываем статус через 3 секунды
-                    delay(3000)
-                    binding.tvSosStatus.text = ""
                     isSendingSOS = false
                 }
 
@@ -320,13 +458,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun simulateHardwareTrigger() {
-        // Симуляция срабатывания аппаратной кнопки на устройстве
-        Toast.makeText(this, "Симуляция срабатывания аппаратной кнопки", Toast.LENGTH_SHORT).show()
-
-        // Вибро-отклик
+        Toast.makeText(this, "Симуляция аппаратной кнопки", Toast.LENGTH_SHORT).show()
         binding.sosButton.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-
-        // Отправляем тестовое SOS
         if (!isSendingSOS) {
             CoroutineScope(Dispatchers.Main).launch {
                 delay(500)
@@ -336,13 +469,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkDeviceConnection() {
-        // Симуляция проверки подключения к аппаратному устройству
         CoroutineScope(Dispatchers.Main).launch {
-            delay(1000) // Имитация задержки подключения
-
-            // Проверяем реальное подключение Bluetooth
-            val isConnected = bluetoothService.isConnected()
-
+            delay(1000)
             updateDeviceStatus()
         }
     }
@@ -371,23 +499,11 @@ class MainActivity : AppCompatActivity() {
                 selectedContacts.add(EmergencyContact(name, phone))
             }
         }
-
-        // Просто уберите строку с .text
-        // binding.contactsButton.text = "Контакты (${selectedContacts.size}/3)"
-
-        // Вместо этого можно обновить контент в другом месте
         updateUIWithContactsCount()
     }
 
     private fun updateUIWithContactsCount() {
-        // Например, в заголовке или статусе
         binding.tvSosStatus.text = "Готово к отправке (${selectedContacts.size} контактов)"
-        // Или в Toast при нажатии
-        binding.contactsButton.setOnClickListener {
-            Toast.makeText(this, "Контакты: ${selectedContacts.size}/3", Toast.LENGTH_SHORT).show()
-            val intent = Intent(this, ContactsActivity::class.java)
-            startActivityForResult(intent, REQUEST_CONTACTS)
-        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -396,12 +512,11 @@ class MainActivity : AppCompatActivity() {
         when (requestCode) {
             REQUEST_CONTACTS -> {
                 if (resultCode == RESULT_OK) {
-                    loadContacts() // Перезагружаем контакты
+                    loadContacts()
                     Toast.makeText(this, "Контакты обновлены", Toast.LENGTH_SHORT).show()
                 }
             }
             REQUEST_ENABLE_BT -> {
-                // Bluetooth включен, можно попробовать подключиться снова
                 if (bluetoothService.isBluetoothEnabled()) {
                     connectToSim800L()
                 }
@@ -422,6 +537,11 @@ class MainActivity : AppCompatActivity() {
                     Toast.makeText(this, "Разрешение на SMS получено", Toast.LENGTH_SHORT).show()
                 }
             }
+            REQUEST_LOCATION_PERMISSION -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    Toast.makeText(this, "Разрешение на геолокацию получено", Toast.LENGTH_SHORT).show()
+                }
+            }
             REQUEST_BLUETOOTH_PERMISSIONS -> {
                 if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     Toast.makeText(this, "Разрешения Bluetooth получены", Toast.LENGTH_SHORT).show()
@@ -438,5 +558,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         bluetoothService.disconnect()
+        trackingJob?.cancel()
+        cancellationTokenSource.cancel()
     }
 }

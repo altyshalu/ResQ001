@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Фильтр для USB устройств -->
+    <usb-device vendor-id="1027" product-id="24577" /> <!-- HC-05 -->
+    <usb-device vendor-id="1027" product-id="24578" /> <!-- HC-06 -->
+    <usb-device vendor-id="4292" product-id="60000" /> <!-- SIM800L USB -->
+</resources>

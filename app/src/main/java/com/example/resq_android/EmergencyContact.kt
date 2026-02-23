@@ -6,18 +6,22 @@ import android.os.Parcelable
 data class EmergencyContact(
     val name: String,
     val phone: String,
-    val relation: String = "Друг"  // Добавьте это поле
+    var id: String = "",
+    val relation: String = "Друг"
 ) : Parcelable {
+
     constructor(parcel: Parcel) : this(
         parcel.readString() ?: "",
         parcel.readString() ?: "",
-        parcel.readString() ?: "Друг"  // Добавьте сюда
+        parcel.readString() ?: "",      // id - исправлено
+        parcel.readString() ?: "Друг"   // relation
     )
 
     override fun writeToParcel(parcel: Parcel, flags: Int) {
         parcel.writeString(name)
         parcel.writeString(phone)
-        parcel.writeString(relation)  // Добавьте сюда
+        parcel.writeString(id)           // id - добавлено
+        parcel.writeString(relation)
     }
 
     override fun describeContents(): Int = 0

@@ -63,6 +63,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview:1.5.4")
     implementation("androidx.activity:activity-compose:1.8.0")
     debugImplementation("androidx.compose.ui:ui-tooling:1.5.4")
+    implementation("com.google.android.gms:play-services-location:21.0.1")
 
     // Для поддержки тем Compose (Color.kt, Theme.kt, Type.kt)
     implementation("androidx.compose.runtime:runtime:1.5.4")
