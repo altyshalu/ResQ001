@@ -3,10 +3,10 @@ package com.example.resq_android
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
 import android.provider.ContactsContract
+import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -51,28 +51,24 @@ class ContactsActivity : AppCompatActivity() {
                     Toast.makeText(this, "Можно выбрать только $MAX_CONTACTS контакта", Toast.LENGTH_SHORT).show()
                     contactsAdapter.updateSelection(contact, false)
                 } else {
-                    selectedContacts.add(contact)
+                    if (selectedContacts.none { it.phone == contact.phone }) {
+                        selectedContacts.add(contact)
+                    }
                     updateSelectedCount()
                 }
             } else {
-                selectedContacts.remove(contact)
+                selectedContacts.removeAll { it.phone == contact.phone }
                 updateSelectedCount()
             }
         }
     }
 
     private fun setupButtons() {
-        binding.backButton.setOnClickListener {
-            finish()
-        }
-
-        binding.saveButton.setOnClickListener {
-            saveSelectedContacts()
-        }
-
+        binding.backButton.setOnClickListener { finish() }
+        binding.saveButton.setOnClickListener { saveSelectedContacts() }
         binding.pickContactButton.setOnClickListener {
             if (selectedContacts.size >= MAX_CONTACTS) {
-                Toast.makeText(this, "Вы уже выбрали максимальное количество контактов", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Уже выбрано максимальное количество контактов", Toast.LENGTH_SHORT).show()
             } else {
                 pickContactFromPhone()
             }
@@ -86,12 +82,23 @@ class ContactsActivity : AppCompatActivity() {
     private fun checkContactsPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
             != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this,
-                arrayOf(Manifest.permission.READ_CONTACTS), PERMISSION_REQUEST_CODE
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.READ_CONTACTS),
+                PERMISSION_REQUEST_CODE
             )
         } else {
             loadContacts()
         }
+    }
+
+    /**
+     * 🔥 ПРОСТО УБИРАЕМ ПРОБЕЛЫ И ТИРЕ - ВСЁ ОСТАЛЬНОЕ КАК ЕСТЬ
+     */
+    private fun cleanPhoneNumber(raw: String): String {
+        // Убираем только пробелы, тире, скобки
+        // НЕ МЕНЯЕМ НИКАКИЕ ЦИФРЫ, НЕ ДОБАВЛЯЕМ +
+        return raw.replace(Regex("[\\s\\-()]"), "")
     }
 
     private fun loadContacts() {
@@ -110,17 +117,22 @@ class ContactsActivity : AppCompatActivity() {
         )
 
         cursor?.use {
-            val idColumn = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID)
-            val nameColumn = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
-            val numberColumn = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+            val idCol = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID)
+            val nameCol = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+            val numCol = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
 
             while (it.moveToNext()) {
-                val contactId = it.getString(idColumn)
-                val name = it.getString(nameColumn)
-                val phone = it.getString(numberColumn)
+                val id = it.getString(idCol)
+                val name = it.getString(nameCol) ?: "Без имени"
+                val rawPhone = it.getString(numCol) ?: ""
 
-                if (allContacts.none { contact -> contact.phone == phone }) {
-                    allContacts.add(EmergencyContact(name, phone, contactId))
+                // 🔥 ТОЛЬКО убираем пробелы, ничего не меняем
+                val phone = cleanPhoneNumber(rawPhone)
+
+                Log.d("Contacts", "$name: '$rawPhone' → '$phone'")
+
+                if (phone.isNotEmpty() && allContacts.none { c -> c.phone == phone }) {
+                    allContacts.add(EmergencyContact(name, phone, id))
                 }
             }
         }
@@ -139,14 +151,15 @@ class ContactsActivity : AppCompatActivity() {
             val saved: List<EmergencyContact> = gson.fromJson(json, type)
             selectedContacts.clear()
             selectedContacts.addAll(saved)
-            updateSelectedCount()
         } catch (e: Exception) {
             selectedContacts.clear()
         }
+
+        updateSelectedCount()
     }
 
     private fun highlightSavedContacts() {
-        if (selectedContacts.isNotEmpty() && allContacts.isNotEmpty()) {
+        if (selectedContacts.isNotEmpty()) {
             contactsAdapter.setSelectedContacts(selectedContacts)
         }
     }
@@ -160,8 +173,8 @@ class ContactsActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
 
         if (requestCode == PICK_CONTACT_REQUEST && resultCode == RESULT_OK) {
-            data?.data?.let { contactUri ->
-                getContactFromUri(contactUri)?.let { contact ->
+            data?.data?.let { uri ->
+                getContactFromUri(uri)?.let { contact ->
                     if (selectedContacts.any { it.phone == contact.phone }) {
                         Toast.makeText(this, "Этот контакт уже выбран", Toast.LENGTH_SHORT).show()
                         return
@@ -184,46 +197,26 @@ class ContactsActivity : AppCompatActivity() {
 
     private fun getContactFromUri(contactUri: Uri): EmergencyContact? {
         return try {
-            val cursor = contentResolver.query(contactUri, null, null, null, null)
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    val nameColumn = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
-                    val numberColumn = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+            contentResolver.query(contactUri, null, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameCol = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                    val numCol = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
 
-                    val name = if (nameColumn >= 0) it.getString(nameColumn) else "Без имени"
-                    val phone = if (numberColumn >= 0) it.getString(numberColumn) else ""
+                    val name = if (nameCol >= 0) cursor.getString(nameCol) ?: "Без имени" else "Без имени"
+                    val rawPhone = if (numCol >= 0) cursor.getString(numCol) ?: "" else ""
 
-                    val formattedPhone = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+                    // 🔥 ТОЛЬКО убираем пробелы
+                    val phone = cleanPhoneNumber(rawPhone)
 
-                    EmergencyContact(
-                        name = name,
-                        phone = formattedPhone,
-                        id = System.currentTimeMillis().toString()
-                    )
+                    Log.d("Contacts", "Выбран: $name | '$rawPhone' → '$phone'")
+
+                    if (phone.isEmpty()) null
+                    else EmergencyContact(name, phone, System.currentTimeMillis().toString())
                 } else null
             }
         } catch (e: Exception) {
             e.printStackTrace()
             null
-        }
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-
-        when (requestCode) {
-            PERMISSION_REQUEST_CODE -> {
-                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    loadContacts()
-                } else {
-                    Toast.makeText(this, "Нет доступа к контактам", Toast.LENGTH_SHORT).show()
-                    finish()
-                }
-            }
         }
     }
 
@@ -237,23 +230,36 @@ class ContactsActivity : AppCompatActivity() {
         val editor = sharedPref.edit()
         val gson = Gson()
 
-        val json = gson.toJson(selectedContacts)
-        editor.putString("selected_contacts", json)
-        editor.apply()
-
+        editor.putString("selected_contacts", gson.toJson(selectedContacts))
         editor.putInt("contacts_count", selectedContacts.size)
-        selectedContacts.forEachIndexed { index, contact ->
-            editor.putString("contact_name_$index", contact.name)
-            editor.putString("contact_phone_$index", contact.phone)
+        selectedContacts.forEachIndexed { i, contact ->
+            editor.putString("contact_name_$i", contact.name)
+            editor.putString("contact_phone_$i", contact.phone) // 🔥 Сохраняем как есть
         }
         editor.apply()
 
-        Toast.makeText(this, "Сохранено ${selectedContacts.size} контактов", Toast.LENGTH_SHORT).show()
+        Log.d("Contacts", "Сохранено ${selectedContacts.size} контактов:")
+        selectedContacts.forEach { Log.d("Contacts", "  ${it.name}: ${it.phone}") }
 
-        val resultIntent = Intent()
-        resultIntent.putExtra("contacts_updated", true)
-        setResult(RESULT_OK, resultIntent)
+        Toast.makeText(this, "Сохранено ${selectedContacts.size} контактов ✅", Toast.LENGTH_SHORT).show()
 
+        setResult(RESULT_OK, Intent().putExtra("contacts_updated", true))
         finish()
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                loadContacts()
+            } else {
+                Toast.makeText(this, "Нет доступа к контактам", Toast.LENGTH_SHORT).show()
+                finish()
+            }
+        }
     }
 }

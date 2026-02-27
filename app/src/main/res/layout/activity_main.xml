@@ -20,6 +20,7 @@
 
     <!-- Карточка статуса подключения -->
     <androidx.cardview.widget.CardView
+        android:id="@+id/connectionCard"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_margin="20dp"
@@ -41,7 +42,7 @@
                 android:id="@+id/deviceStatus"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Устройство: не подключено"
+                android:text="❌ Устройство не подключено"
                 android:textColor="#666666"
                 android:textSize="16sp"
                 android:gravity="center"
@@ -64,7 +65,7 @@
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
-    <!-- Основной контент - SOS кнопка -->
+    <!-- SOS Кнопка -->
     <androidx.cardview.widget.CardView
         android:id="@+id/sosCard"
         android:layout_width="240dp"
@@ -125,17 +126,16 @@
                     android:id="@+id/tvSosStatus"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text=""
+                    android:text="Готов (0 контактов)"
                     android:textColor="#FFFFFF"
                     android:textSize="14sp"
                     android:textStyle="bold"
-                    android:layout_marginTop="12dp"
-                    android:visibility="gone" />
+                    android:layout_marginTop="12dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
     </androidx.cardview.widget.CardView>
 
-    <!-- Нижняя панель с тремя кнопками -->
+    <!-- Нижняя панель с четырьмя кнопками -->
     <androidx.cardview.widget.CardView
         android:id="@+id/bottomPanel"
         android:layout_width="match_parent"
@@ -154,7 +154,7 @@
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:padding="12dp"
-            android:weightSum="3">
+            android:weightSum="4">
 
             <!-- Кнопка контактов -->
             <LinearLayout
@@ -185,7 +185,7 @@
                     android:textSize="12sp" />
             </LinearLayout>
 
-            <!-- Кнопка поделиться местоположением с TextView для статуса -->
+            <!-- Кнопка отслеживания -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -205,7 +205,6 @@
                     app:elevation="4dp"
                     app:fabSize="mini" />
 
-                <!-- TextView для отображения статуса (Остановить/Отслеживание) -->
                 <TextView
                     android:id="@+id/tvTrackingStatus"
                     android:layout_width="wrap_content"
@@ -241,6 +240,35 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:text="Настройки"
+                    android:textColor="#666666"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- 🔥 НОВАЯ КНОПКА: Просмотр трека -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="?android:attr/selectableItemBackground"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="8dp">
+
+                <com.google.android.material.floatingactionbutton.FloatingActionButton
+                    android:id="@+id/btnViewTrack"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:src="@drawable/ic_track"
+                    android:tint="#FFFFFF"
+                    app:backgroundTint="#9C27B0"
+                    app:elevation="4dp"
+                    app:fabSize="mini" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Трек"
                     android:textColor="#666666"
                     android:textSize="12sp" />
             </LinearLayout>
