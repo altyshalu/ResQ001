@@ -1,4 +1,4 @@
-1) Connected devices will have coordinates in message
+
 
 2) Локация каждые 10 секунд пока не остановлю
 
